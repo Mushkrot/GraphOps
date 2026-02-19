@@ -1,0 +1,84 @@
+# GraphOps Core Schema Migration 001
+# Creates the shared graph space and all core vertex/edge types
+# Per PRD v2.2 sections 9.2-9.8 and 7.4
+
+CREATE SPACE IF NOT EXISTS graphops (vid_type = FIXED_STRING(64), partition_num = 10, replica_factor = 1);
+:sleep 20;
+USE graphops;
+
+# Entity: base tag for all domain objects
+CREATE TAG IF NOT EXISTS Entity (workspace_id string NOT NULL, entity_type string NOT NULL, primary_key string NOT NULL, display_name string, created_at datetime, updated_at datetime, resolved_at datetime);
+
+# AssertionRecord: evidence-backed claim (PRD 9.2-9.3)
+CREATE TAG IF NOT EXISTS AssertionRecord (workspace_id string NOT NULL, assertion_key string NOT NULL, raw_hash string NOT NULL, normalized_hash string NOT NULL, source_type string NOT NULL, source_ref string, source_id string, import_run_id string, recorded_at datetime NOT NULL, valid_from datetime NOT NULL, valid_to datetime, scenario_id string DEFAULT "base", confidence double DEFAULT 1.0, supersedes string, relationship_type string NOT NULL, property_key string);
+
+# PropertyValue: typed value vertex for entity attributes (PRD 9.8)
+CREATE TAG IF NOT EXISTS PropertyValue (workspace_id string NOT NULL, property_key string NOT NULL, value string, value_type string NOT NULL);
+
+# ChangeEvent: causal tracking vertex (PRD 9.6)
+CREATE TAG IF NOT EXISTS ChangeEvent (workspace_id string NOT NULL, event_type string NOT NULL, description string, ts datetime NOT NULL, import_run_id string, actor string, stats string);
+
+# ImportRun: provenance for batch imports
+CREATE TAG IF NOT EXISTS ImportRun (workspace_id string NOT NULL, source_file string, spec_name string, started_at datetime NOT NULL, completed_at datetime, status string NOT NULL, stats string, error_message string);
+
+# Source: registered data source with authority rank (PRD 13.2)
+CREATE TAG IF NOT EXISTS Source (workspace_id string NOT NULL, source_name string NOT NULL, source_type string NOT NULL, authority_rank int NOT NULL, authority_domains string, update_frequency string, description string);
+
+# Edge: ASSERTED_REL connects entities through assertion vertices
+CREATE EDGE IF NOT EXISTS ASSERTED_REL (assertion_id string NOT NULL);
+
+# Edge: TRIGGERED_BY links ChangeEvent to trigger Entity
+CREATE EDGE IF NOT EXISTS TRIGGERED_BY (description string);
+
+# Edge: CREATED_ASSERTION links ChangeEvent to new AssertionRecords
+CREATE EDGE IF NOT EXISTS CREATED_ASSERTION (description string);
+
+# Edge: CLOSED_ASSERTION links ChangeEvent to closed AssertionRecords
+CREATE EDGE IF NOT EXISTS CLOSED_ASSERTION (description string);
+
+# Indexes on AssertionRecord
+CREATE TAG INDEX IF NOT EXISTS idx_assertion_wid_key_scenario ON AssertionRecord(workspace_id(64), assertion_key(256), scenario_id(64));
+CREATE TAG INDEX IF NOT EXISTS idx_assertion_wid_valid ON AssertionRecord(workspace_id(64), valid_from, valid_to);
+CREATE TAG INDEX IF NOT EXISTS idx_assertion_key_scenario ON AssertionRecord(assertion_key(256), scenario_id(64));
+CREATE TAG INDEX IF NOT EXISTS idx_assertion_source_recorded ON AssertionRecord(source_id(64), recorded_at);
+CREATE TAG INDEX IF NOT EXISTS idx_assertion_import_run ON AssertionRecord(import_run_id(64));
+CREATE TAG INDEX IF NOT EXISTS idx_assertion_workspace ON AssertionRecord(workspace_id(64));
+CREATE TAG INDEX IF NOT EXISTS idx_assertion_rel_type ON AssertionRecord(workspace_id(64), relationship_type(64));
+
+# Indexes on Entity
+CREATE TAG INDEX IF NOT EXISTS idx_entity_wid_type_pk ON Entity(workspace_id(64), entity_type(64), primary_key(256));
+CREATE TAG INDEX IF NOT EXISTS idx_entity_workspace ON Entity(workspace_id(64));
+
+# Indexes on PropertyValue
+CREATE TAG INDEX IF NOT EXISTS idx_propval_workspace ON PropertyValue(workspace_id(64));
+CREATE TAG INDEX IF NOT EXISTS idx_propval_wid_key ON PropertyValue(workspace_id(64), property_key(128));
+
+# Indexes on ChangeEvent
+CREATE TAG INDEX IF NOT EXISTS idx_changeevent_workspace ON ChangeEvent(workspace_id(64));
+CREATE TAG INDEX IF NOT EXISTS idx_changeevent_wid_ts ON ChangeEvent(workspace_id(64), ts);
+CREATE TAG INDEX IF NOT EXISTS idx_changeevent_import_run ON ChangeEvent(import_run_id(64));
+
+# Indexes on ImportRun
+CREATE TAG INDEX IF NOT EXISTS idx_importrun_workspace ON ImportRun(workspace_id(64));
+
+# Indexes on Source
+CREATE TAG INDEX IF NOT EXISTS idx_source_workspace ON Source(workspace_id(64));
+
+:sleep 10;
+# Rebuild all indexes
+REBUILD TAG INDEX idx_assertion_wid_key_scenario;
+REBUILD TAG INDEX idx_assertion_wid_valid;
+REBUILD TAG INDEX idx_assertion_key_scenario;
+REBUILD TAG INDEX idx_assertion_source_recorded;
+REBUILD TAG INDEX idx_assertion_import_run;
+REBUILD TAG INDEX idx_assertion_workspace;
+REBUILD TAG INDEX idx_assertion_rel_type;
+REBUILD TAG INDEX idx_entity_wid_type_pk;
+REBUILD TAG INDEX idx_entity_workspace;
+REBUILD TAG INDEX idx_propval_workspace;
+REBUILD TAG INDEX idx_propval_wid_key;
+REBUILD TAG INDEX idx_changeevent_workspace;
+REBUILD TAG INDEX idx_changeevent_wid_ts;
+REBUILD TAG INDEX idx_changeevent_import_run;
+REBUILD TAG INDEX idx_importrun_workspace;
+REBUILD TAG INDEX idx_source_workspace;

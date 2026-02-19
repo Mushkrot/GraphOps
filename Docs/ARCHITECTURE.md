@@ -178,3 +178,58 @@ OpenAPI docs: `http://localhost:9200/docs`
 | Frontend | Next.js + TypeScript | 15.x |
 | LLM | Ollama (local) | latest |
 | IDs | UUID v7 | — |
+
+---
+
+## Known Issues & Implementation Notes
+
+These are important details discovered during M0 implementation:
+
+### NebulaGraph
+- **nGQL comments**: use `#`, not `--` (SQL-style comments cause SyntaxError)
+- **nGQL statements**: must be single-line (no multiline statements)
+- **Reserved words**: `timestamp` is reserved — ChangeEvent uses `ts` instead
+- **Underscore prefix**: `_resolved_at` caused parse issues — renamed to `resolved_at`
+- **ADD HOSTS**: requires quoted hostname in v3.8: `ADD HOSTS "nebula-storaged":9779;`
+- **Index rebuild**: needs `:sleep 10` after index creation before REBUILD
+- **Docker network**: Compose prefixes directory name → network is `infra_graphops-net`
+- **VID format**: FIXED_STRING(64), UUID v7 hex (32 chars) + optional prefix
+
+### Docker
+- **Qdrant healthcheck**: curl not available in container, using `bash -c 'echo > /dev/tcp/localhost/6333'`
+- **graphd depends on metad** (not storaged) to avoid chicken-and-egg with ADD HOSTS
+- **storaged** needs ADD HOSTS from graphd before it becomes healthy (handled by `start.sh`)
+
+### Python / FastAPI
+- **pydantic-settings**: `.env` has extra vars not in Settings → `"extra": "ignore"` in model_config
+- **Git remote**: uses SSH (`git@github.com:Mushkrot/GraphOps.git`), key at `~/.ssh/git`
+
+---
+
+## Resume Checklist (for continuing development)
+
+```bash
+# 1. Verify Docker services are running
+cd /ai/GraphOps && docker compose -f infra/docker-compose.yml ps
+
+# If not running:
+bash infra/start.sh
+
+# 2. Verify NebulaGraph schema exists
+docker run --rm --network infra_graphops-net \
+  vesoft/nebula-console:v3.8.0 \
+  -addr nebula-graphd -port 9669 -u root -p nebula \
+  -e 'USE graphops; SHOW TAGS; SHOW EDGES;'
+
+# 3. Activate Python venv
+source .venv/bin/activate
+
+# 4. Run tests
+pytest tests/ -v
+
+# 5. Start backend
+uvicorn backend.main:app --host 0.0.0.0 --port 9200
+
+# 6. Verify health
+curl http://localhost:9200/api/health
+```

@@ -299,7 +299,7 @@ These are important details discovered during M0 implementation:
 ### NebulaGraph
 - **nGQL comments**: use `#`, not `--` (SQL-style comments cause SyntaxError)
 - **nGQL statements**: must be single-line (no multiline statements)
-- **Reserved words**: `timestamp` is reserved — ChangeEvent uses `ts` instead
+- **Reserved words**: `timestamp`, `desc` are reserved — ChangeEvent uses `ts`, YIELD aliases use `descr`
 - **Underscore prefix**: `_resolved_at` caused parse issues — renamed to `resolved_at`
 - **ADD HOSTS**: requires quoted hostname in v3.8: `ADD HOSTS "nebula-storaged":9779;`
 - **Index rebuild**: needs `:sleep 10` after index creation before REBUILD
@@ -325,6 +325,9 @@ These are important details discovered during M0 implementation:
 - **Synchronous imports**: M1 runs imports inline in HTTP request. RQ background jobs deferred. `run_import()` function is RQ-ready (takes serializable args, no request context)
 - **Spec files**: stored in `specs/` directory, loaded by name (without `.yaml` extension). Files starting with `_` are excluded from `list_specs()` but can be loaded directly
 - **Upload storage**: raw files saved to `data/raw/{workspace_id}/` (gitignored)
+- **NebulaGraph NULL vs EMPTY**: `is_empty()` only catches `__EMPTY__` (unset), `is_null()` catches explicit NULL — use `_is_null()` helper that checks both
+- **NebulaGraph DateTimeWrapper**: `as_datetime()` returns a nebula3 `DateTimeWrapper`, NOT a Python datetime. Must manually construct `datetime()` from `get_year()`, `get_month()`, etc.
+- **ASSERTED_REL traversal**: to find assertions for an entity, use forward `GO FROM entity OVER ASSERTED_REL` (not REVERSELY), because edges go entity→assertion
 
 ---
 

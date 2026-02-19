@@ -31,6 +31,47 @@ logger = logging.getLogger(__name__)
 # Helpers
 # ---------------------------------------------------------------------------
 
+def _is_null(val) -> bool:
+    """Check if a NebulaGraph ValueWrapper represents a null/empty value.
+
+    NebulaGraph returns is_empty()=True for __EMPTY__ (unset fields)
+    and is_null()=True for explicit NULL values. We need to check both.
+    """
+    try:
+        if val.is_empty():
+            return True
+    except Exception:
+        pass
+    try:
+        if val.is_null():
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def _to_dt(val) -> Optional[datetime]:
+    """Convert a NebulaGraph DateTimeWrapper to a Python datetime.
+
+    as_datetime() returns a nebula3 DateTimeWrapper. We extract individual
+    fields and construct a Python datetime since get_datetime() returns
+    the raw thrift DateTime object, not a Python datetime.
+    """
+    if _is_null(val):
+        return None
+    wrapper = val.as_datetime()
+    return datetime(
+        year=wrapper.get_year(),
+        month=wrapper.get_month(),
+        day=wrapper.get_day(),
+        hour=wrapper.get_hour(),
+        minute=wrapper.get_minute(),
+        second=wrapper.get_sec(),
+        microsecond=wrapper.get_microsec(),
+        tzinfo=timezone.utc,
+    )
+
+
 def _escape(value: str) -> str:
     """Escape a string value for nGQL insertion (single-quoted)."""
     if value is None:
@@ -69,7 +110,7 @@ def _parse_entity_row(row) -> EntityModel:
         workspace_id=row[1].as_string(),
         entity_type=row[2].as_string(),
         primary_key=row[3].as_string(),
-        display_name=row[4].as_string() if not row[4].is_empty() else None,
+        display_name=row[4].as_string() if not _is_null(row[4]) else None,
         created_at=None,
         updated_at=None,
     )
@@ -84,17 +125,17 @@ def _parse_assertion_row(row) -> AssertionRecordModel:
         raw_hash=row[3].as_string(),
         normalized_hash=row[4].as_string(),
         source_type=row[5].as_string(),
-        source_ref=row[6].as_string() if not row[6].is_empty() else None,
-        source_id=row[7].as_string() if not row[7].is_empty() else None,
-        import_run_id=row[8].as_string() if not row[8].is_empty() else None,
-        recorded_at=row[9].as_datetime(),
-        valid_from=row[10].as_datetime(),
-        valid_to=row[11].as_datetime() if not row[11].is_empty() else None,
+        source_ref=row[6].as_string() if not _is_null(row[6]) else None,
+        source_id=row[7].as_string() if not _is_null(row[7]) else None,
+        import_run_id=row[8].as_string() if not _is_null(row[8]) else None,
+        recorded_at=_to_dt(row[9]),
+        valid_from=_to_dt(row[10]),
+        valid_to=_to_dt(row[11]),
         scenario_id=row[12].as_string(),
         confidence=row[13].as_double(),
-        supersedes=row[14].as_string() if not row[14].is_empty() else None,
+        supersedes=row[14].as_string() if not _is_null(row[14]) else None,
         relationship_type=row[15].as_string(),
-        property_key=row[16].as_string() if not row[16].is_empty() else None,
+        property_key=row[16].as_string() if not _is_null(row[16]) else None,
     )
 
 
@@ -103,13 +144,13 @@ def _parse_import_run_row(row) -> ImportRunModel:
     return ImportRunModel(
         import_run_id=row[0].as_string(),
         workspace_id=row[1].as_string(),
-        source_file=row[2].as_string() if not row[2].is_empty() else None,
-        spec_name=row[3].as_string() if not row[3].is_empty() else None,
-        started_at=row[4].as_datetime(),
-        completed_at=row[5].as_datetime() if not row[5].is_empty() else None,
+        source_file=row[2].as_string() if not _is_null(row[2]) else None,
+        spec_name=row[3].as_string() if not _is_null(row[3]) else None,
+        started_at=_to_dt(row[4]),
+        completed_at=_to_dt(row[5]),
         status=row[6].as_string(),
-        stats=row[7].as_string() if not row[7].is_empty() else None,
-        error_message=row[8].as_string() if not row[8].is_empty() else None,
+        stats=row[7].as_string() if not _is_null(row[7]) else None,
+        error_message=row[8].as_string() if not _is_null(row[8]) else None,
     )
 
 
@@ -163,7 +204,7 @@ def lookup_entity(
         workspace_id=row[1].as_string(),
         entity_type=row[2].as_string(),
         primary_key=row[3].as_string(),
-        display_name=row[4].as_string() if not row[4].is_empty() else None,
+        display_name=row[4].as_string() if not _is_null(row[4]) else None,
     )
 
 
@@ -184,7 +225,7 @@ def get_entity(workspace_id: str, entity_id: str) -> Optional[EntityModel]:
         workspace_id=row[1].as_string(),
         entity_type=row[2].as_string(),
         primary_key=row[3].as_string(),
-        display_name=row[4].as_string() if not row[4].is_empty() else None,
+        display_name=row[4].as_string() if not _is_null(row[4]) else None,
     )
     # Validate workspace
     if ent.workspace_id != workspace_id:
@@ -221,7 +262,7 @@ def search_entities(
             workspace_id=row[1].as_string(),
             entity_type=row[2].as_string(),
             primary_key=row[3].as_string(),
-            display_name=row[4].as_string() if not row[4].is_empty() else None,
+            display_name=row[4].as_string() if not _is_null(row[4]) else None,
         ))
     return entities
 
@@ -298,8 +339,8 @@ def lookup_assertions_by_import_run(import_run_id: str) -> list[AssertionRecordM
 def get_assertions_for_entity(workspace_id: str, entity_id: str) -> list[AssertionRecordModel]:
     """Get all assertions connected to an entity via ASSERTED_REL (reverse traversal)."""
     ngql = (
-        f'GO FROM {_escape(entity_id)} OVER ASSERTED_REL REVERSELY '
-        f'YIELD src(edge) AS assertion_vid;'
+        f'GO FROM {_escape(entity_id)} OVER ASSERTED_REL '
+        f'YIELD dst(edge) AS assertion_vid;'
     )
     result = execute_query(ngql)
     if result.row_size() == 0:
@@ -332,10 +373,6 @@ def _fetch_assertions(vids: list[str], filter_open: bool = False) -> list[Assert
     assertions = []
     for i in range(result.row_size()):
         row = result.row_values(i)
-        valid_to = None
-        if not row[11].is_empty():
-            valid_to = row[11].as_datetime()
-
         a = AssertionRecordModel(
             assertion_id=row[0].as_string(),
             workspace_id=row[1].as_string(),
@@ -343,17 +380,17 @@ def _fetch_assertions(vids: list[str], filter_open: bool = False) -> list[Assert
             raw_hash=row[3].as_string(),
             normalized_hash=row[4].as_string(),
             source_type=row[5].as_string(),
-            source_ref=row[6].as_string() if not row[6].is_empty() else None,
-            source_id=row[7].as_string() if not row[7].is_empty() else None,
-            import_run_id=row[8].as_string() if not row[8].is_empty() else None,
-            recorded_at=row[9].as_datetime(),
-            valid_from=row[10].as_datetime(),
-            valid_to=valid_to,
+            source_ref=row[6].as_string() if not _is_null(row[6]) else None,
+            source_id=row[7].as_string() if not _is_null(row[7]) else None,
+            import_run_id=row[8].as_string() if not _is_null(row[8]) else None,
+            recorded_at=_to_dt(row[9]),
+            valid_from=_to_dt(row[10]),
+            valid_to=_to_dt(row[11]),
             scenario_id=row[12].as_string(),
             confidence=row[13].as_double(),
-            supersedes=row[14].as_string() if not row[14].is_empty() else None,
+            supersedes=row[14].as_string() if not _is_null(row[14]) else None,
             relationship_type=row[15].as_string(),
-            property_key=row[16].as_string() if not row[16].is_empty() else None,
+            property_key=row[16].as_string() if not _is_null(row[16]) else None,
         )
         if filter_open and a.valid_to is not None:
             continue
@@ -502,13 +539,13 @@ def get_import_run(workspace_id: str, import_run_id: str) -> Optional[ImportRunM
     ir = ImportRunModel(
         import_run_id=row[0].as_string(),
         workspace_id=row[1].as_string(),
-        source_file=row[2].as_string() if not row[2].is_empty() else None,
-        spec_name=row[3].as_string() if not row[3].is_empty() else None,
-        started_at=row[4].as_datetime(),
-        completed_at=row[5].as_datetime() if not row[5].is_empty() else None,
+        source_file=row[2].as_string() if not _is_null(row[2]) else None,
+        spec_name=row[3].as_string() if not _is_null(row[3]) else None,
+        started_at=_to_dt(row[4]),
+        completed_at=_to_dt(row[5]),
         status=row[6].as_string(),
-        stats=row[7].as_string() if not row[7].is_empty() else None,
-        error_message=row[8].as_string() if not row[8].is_empty() else None,
+        stats=row[7].as_string() if not _is_null(row[7]) else None,
+        error_message=row[8].as_string() if not _is_null(row[8]) else None,
     )
     if ir.workspace_id != workspace_id:
         return None
@@ -542,13 +579,13 @@ def list_import_runs(workspace_id: str, limit: int = 50) -> list[ImportRunModel]
         runs.append(ImportRunModel(
             import_run_id=row[0].as_string(),
             workspace_id=row[1].as_string(),
-            source_file=row[2].as_string() if not row[2].is_empty() else None,
-            spec_name=row[3].as_string() if not row[3].is_empty() else None,
-            started_at=row[4].as_datetime(),
-            completed_at=row[5].as_datetime() if not row[5].is_empty() else None,
+            source_file=row[2].as_string() if not _is_null(row[2]) else None,
+            spec_name=row[3].as_string() if not _is_null(row[3]) else None,
+            started_at=_to_dt(row[4]),
+            completed_at=_to_dt(row[5]),
             status=row[6].as_string(),
-            stats=row[7].as_string() if not row[7].is_empty() else None,
-            error_message=row[8].as_string() if not row[8].is_empty() else None,
+            stats=row[7].as_string() if not _is_null(row[7]) else None,
+            error_message=row[8].as_string() if not _is_null(row[8]) else None,
         ))
     # Sort by started_at descending
     runs.sort(key=lambda r: r.started_at, reverse=True)
@@ -580,7 +617,7 @@ def list_sources(workspace_id: str) -> list[SourceModel]:
         f'YIELD id(vertex) AS vid, Source.workspace_id AS wid, Source.source_name AS sn, '
         f'Source.source_type AS st, Source.authority_rank AS ar, '
         f'Source.authority_domains AS ad, Source.update_frequency AS uf, '
-        f'Source.description AS desc;'
+        f'Source.description AS descr;'
     )
     result = execute_query(ngql)
     sources = []
@@ -592,9 +629,9 @@ def list_sources(workspace_id: str) -> list[SourceModel]:
             source_name=row[2].as_string(),
             source_type=row[3].as_string(),
             authority_rank=row[4].as_int(),
-            authority_domains=row[5].as_string() if not row[5].is_empty() else None,
-            update_frequency=row[6].as_string() if not row[6].is_empty() else None,
-            description=row[7].as_string() if not row[7].is_empty() else None,
+            authority_domains=row[5].as_string() if not _is_null(row[5]) else None,
+            update_frequency=row[6].as_string() if not _is_null(row[6]) else None,
+            description=row[7].as_string() if not _is_null(row[7]) else None,
         ))
     return sources
 

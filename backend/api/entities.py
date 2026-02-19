@@ -12,7 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from backend.api.deps import get_workspace_id
 from backend.core import graph_ops
 from backend.core.graph_client import execute_query
-from backend.core.graph_ops import _escape
+from backend.core.graph_ops import _escape, _is_null
 from backend.core.models import (
     EntityDetailResponse,
     EntitySearchResponse,
@@ -183,7 +183,7 @@ def _get_property_value_via_edge(assertion_id: str) -> Optional[dict]:
                 row = pv_result.row_values(0)
                 return {
                     "property_key": row[0].as_string(),
-                    "value": row[1].as_string() if not row[1].is_empty() else None,
+                    "value": row[1].as_string() if not _is_null(row[1]) else None,
                     "value_type": row[2].as_string(),
                 }
     except Exception as e:
@@ -216,7 +216,7 @@ def _get_relationship_target(assertion_id: str) -> Optional[dict]:
                     "entity_id": row[0].as_string(),
                     "entity_type": row[1].as_string(),
                     "primary_key": row[2].as_string(),
-                    "display_name": row[3].as_string() if not row[3].is_empty() else None,
+                    "display_name": row[3].as_string() if not _is_null(row[3]) else None,
                 }
     except Exception as e:
         logger.warning(f"Failed to fetch target entity for assertion {assertion_id}: {e}")

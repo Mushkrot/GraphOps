@@ -205,3 +205,15 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# ═══════════════════════════════════════════
+# GraphOps specific
+# ═══════════════════════════════════════════
+docker-data/
+data/raw/*
+!data/raw/.gitkeep
+*.env.local
+node_modules/
+.next/
+frontend/node_modules/
+frontend/.next/

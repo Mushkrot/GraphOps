@@ -1,5 +1,43 @@
 # GraphOps — Architecture Overview
 
+> **This is the primary onboarding document.** If you're a new developer joining the project, read this file first. It covers current status, how to run everything, architecture, known pitfalls, and where to find every component.
+
+## Current State at a Glance
+
+| What | Status |
+|------|--------|
+| **Completed milestones** | M0 (Foundations) + M1 (Data Ingestion Engine) |
+| **Unit tests** | 116 passing (`pytest tests/ -v`) |
+| **E2E verified** | Import, entity search, entity detail — all working against live NebulaGraph |
+| **Test data** | Workspace `test_minimal` with 8 entities (5 Items + 3 Categories), 35+ assertions |
+| **Next milestone** | M2: Query Engine + Graph Explorer UI (neighbor expansion, path queries, impact analysis, frontend) |
+| **PRD** | `docs/PRD_v2.2.md` — full product requirements |
+| **Progress tracker** | `docs/TODO.md` — checkbox list per milestone |
+| **OpenAPI docs** | `http://localhost:9200/docs` (when backend is running) |
+
+### What works end-to-end right now
+
+1. Upload an Excel file with an ingestion spec → entities + assertions + properties created in NebulaGraph
+2. Re-import the same file → change detection finds new/changed/unchanged/disappeared data
+3. Search entities by type, primary_key, or display_name
+4. View entity detail with resolved properties and relationships (winner-per-assertion-key)
+5. View import history with stats and diffs
+
+### Quick verification after setup
+
+```bash
+curl http://localhost:9200/api/health
+# → {"status":"ok","services":{"nebula":"ok","qdrant":"ok","redis":"ok"}}
+
+curl http://localhost:9200/api/w/test_minimal/entities/search?type=Item
+# → 5 items (ITM001–ITM005/006)
+
+curl http://localhost:9200/api/w/test_minimal/imports
+# → import run history with stats
+```
+
+---
+
 ## Quick Start
 
 ```bash
@@ -359,10 +397,11 @@ uvicorn backend.main:app --host 0.0.0.0 --port 9200
 curl http://localhost:9200/api/health
 ```
 
-### Current Status Summary (end of M1)
+### Current Status Summary (end of M1 + E2E verified)
 
 **Completed:** M0 (Foundations) + M1 (Data Ingestion Engine)
-**Test count:** 116 tests, all passing
+**Test count:** 116 unit tests, all passing
+**E2E verified:** Import, entity search, entity detail with resolved view — all working against live NebulaGraph
 **Next milestone:** M2 (Query Engine + Graph Explorer UI)
 
 **M1 delivers:**
@@ -372,10 +411,14 @@ curl http://localhost:9200/api/health
 - Dual-hash change detection (strict vs normalized modes)
 - ChangeEvent tracking (one per import, links to all affected assertions)
 
+**E2E test data in graph (workspace `test_minimal`):**
+- 8 entities: 5 Items (ITM001–ITM006) + 3 Categories (CAT01–CAT03)
+- 35+ assertions (properties + BELONGS_TO relationships)
+- Multiple import runs (including re-import with change detection)
+- Verified: resolved view correctly shows updated values after re-import
+
 **What M1 does NOT yet have (deferred):**
 - Background job queue (RQ) — imports run synchronously
-- Integration tests with live NebulaGraph — unit tests mock graph_ops
-- No sample data imported — needs real ingestion spec + Excel file to test end-to-end
 
 **Key files for M1:**
 

@@ -31,15 +31,17 @@ curl http://localhost:9200/api/health
 
 ## Documentation
 
-- [Architecture Overview](docs/ARCHITECTURE.md) — service map, data model, ingestion pipeline, project structure
-- [Development TODO](docs/TODO.md) — milestone progress tracker
-- [Product Requirements](docs/PRD_v2.2.md) — full PRD v2.2
-- [OpenAPI Docs](http://localhost:9200/docs) — interactive API documentation (when backend is running)
+| Document | Purpose |
+|----------|---------|
+| **[Architecture Overview](docs/ARCHITECTURE.md)** | **Start here.** Current status, service map, data model, code structure, known pitfalls, resume checklist |
+| [Development TODO](docs/TODO.md) | Milestone progress tracker (checkbox list) |
+| [Product Requirements](docs/PRD_v2.2.md) | Full PRD v2.2 — requirements, API spec, UI spec |
+| [OpenAPI Docs](http://localhost:9200/docs) | Interactive API documentation (when backend is running) |
 
-## Current Status: M1 (Data Ingestion Engine) Complete
+## Current Status: M1 Complete + E2E Verified
 
 **M0 (Foundations):** Docker infrastructure, NebulaGraph schema (6 tags, 4 edges, 16 indexes), FastAPI backend, schema registry, resolved view engine.
 
-**M1 (Data Ingestion):** Excel upload + parsing, dual-hash change detection, entity/assertion/property graph writing, import management endpoints, entity search + detail with resolved view. 116 tests passing.
+**M1 (Data Ingestion):** Excel upload + parsing, dual-hash change detection, entity/assertion/property graph writing, import management endpoints, entity search + detail with resolved view. 116 unit tests + E2E verified against live NebulaGraph.
 
 **Next:** M2 (Query Engine + Graph Explorer UI) — neighbor expansion, path queries, impact analysis, frontend graph canvas.

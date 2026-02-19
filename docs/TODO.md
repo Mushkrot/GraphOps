@@ -51,8 +51,10 @@ Tracks milestone progress per PRD v2.2 section 24.
 - [x] Source authority management (`upsert_source`, `get_source_authority_map`)
 - [x] API response models (ImportCreateResponse, EntityDetailResponse, etc.)
 - [x] Test suite (116 tests, all passing)
+- [x] E2E testing with live NebulaGraph — import, search, entity detail all verified
+- [x] Bugfixes discovered during E2E: NULL handling (`_is_null`), datetime conversion (`_to_dt`), edge traversal direction, `desc` reserved word
+- [x] Test ingestion spec (`specs/test_items.yaml`) + sample Excel verified
 - [ ] Background job queue (Redis + RQ) — deferred, synchronous-first
-- [ ] Integration tests with live NebulaGraph — next step
 
 ---
 

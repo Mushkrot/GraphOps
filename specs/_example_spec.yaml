@@ -1,0 +1,54 @@
+# Example ingestion spec — illustrates the mapping format.
+# This file is not used for actual ingestion in M0.
+
+spec_name: example_items
+spec_version: "1.0"
+workspace_id: test_minimal
+source_type: excel
+file_pattern: "items_*.xlsx"
+
+raw_hash_serialization:
+  cell_order: column_order
+  delimiter: "|"
+  null_representation: "<NULL>"
+  number_format: as_displayed
+  date_format: as_displayed
+  include_formatting: false
+
+change_detection:
+  mode: normalized
+  normalization_rules:
+    trim_whitespace: true
+    lowercase_strings: true
+    normalize_nulls: ["", "N/A", "n/a", "null", "-"]
+
+sheets:
+  - sheet_name: "Items"
+    header_row: 0
+    entities:
+      item:
+        entity_type: Item
+        key_columns: ["item_code"]
+        key_template: "{item_code}"
+        properties:
+          - source_column: "Item Code"
+            target_property: item_code
+          - source_column: "Item Name"
+            target_property: name
+          - source_column: "Description"
+            target_property: description
+          - source_column: "Price"
+            target_property: price
+      category:
+        entity_type: Category
+        key_columns: ["category_code"]
+        key_template: "{category_code}"
+        properties:
+          - source_column: "Category Code"
+            target_property: category_code
+          - source_column: "Category Name"
+            target_property: name
+    relationships:
+      - relationship_type: BELONGS_TO
+        from_entity: item
+        to_entity: category

@@ -1,0 +1,38 @@
+# Minimal test schema — used for testing the schema registry.
+# Do not use as a production template.
+
+workspace: test_minimal
+version: "1.0"
+
+entity_types:
+  Item:
+    primary_key: item_code
+    description: "A generic item"
+    properties:
+      item_code:
+        type: string
+        required: true
+      name:
+        type: string
+        required: true
+      description:
+        type: string
+      price:
+        type: number
+
+  Category:
+    primary_key: category_code
+    description: "A grouping category"
+    properties:
+      category_code:
+        type: string
+        required: true
+      name:
+        type: string
+        required: true
+
+relationship_types:
+  BELONGS_TO:
+    from: Item
+    to: Category
+    description: "Item belongs to a category"

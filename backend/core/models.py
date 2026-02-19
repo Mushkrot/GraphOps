@@ -135,3 +135,77 @@ class WorkspaceResponse(BaseModel):
     schema_version: Optional[str] = None
     entity_types: list[str] = []
     relationship_types: list[str] = []
+
+
+# --- Import API models ---
+
+
+class ImportCreateResponse(BaseModel):
+    import_run_id: str
+    status: str
+    message: str
+
+
+class ImportRunResponse(BaseModel):
+    import_run_id: str
+    workspace_id: str
+    source_file: Optional[str] = None
+    spec_name: Optional[str] = None
+    started_at: datetime
+    completed_at: Optional[datetime] = None
+    status: str
+    stats: Optional[dict] = None
+    error_message: Optional[str] = None
+
+
+class ImportDiffResponse(BaseModel):
+    import_run_id: str
+    change_event_id: Optional[str] = None
+    stats: Optional[dict] = None
+    created_assertions: list[dict] = []
+    closed_assertions: list[dict] = []
+
+
+# --- Entity API models ---
+
+
+class EntitySearchResult(BaseModel):
+    entity_id: str
+    entity_type: str
+    primary_key: str
+    display_name: Optional[str] = None
+
+
+class EntitySearchResponse(BaseModel):
+    entities: list[EntitySearchResult]
+    total: int
+
+
+class PropertyView(BaseModel):
+    property_key: str
+    value: Optional[str] = None
+    value_type: str
+    source_ref: Optional[str] = None
+    assertion_id: str
+    confidence: float
+
+
+class RelationshipView(BaseModel):
+    relationship_type: str
+    target_entity_id: str
+    target_entity_type: str
+    target_primary_key: str
+    target_display_name: Optional[str] = None
+    assertion_id: str
+    source_ref: Optional[str] = None
+    confidence: float
+
+
+class EntityDetailResponse(BaseModel):
+    entity_id: str
+    entity_type: str
+    primary_key: str
+    display_name: Optional[str] = None
+    properties: list[PropertyView] = []
+    relationships: list[RelationshipView] = []
+    view_mode: str = "resolved"

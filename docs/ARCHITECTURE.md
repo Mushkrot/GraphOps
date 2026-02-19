@@ -104,6 +104,101 @@ Two view modes:
 
 ---
 
+## Data Ingestion Pipeline (M1)
+
+### Import Flow
+
+```
+Excel file + Ingestion Spec
+        │
+        ▼
+┌─────────────────────┐
+│  1. parse_excel()   │  ← excel_parser.py
+│  openpyxl + column  │     Reads sheets, maps columns,
+│  mapping → staged   │     produces StagedRow objects
+│  rows               │     with entities + relationships
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐
+│  2. compute hashes  │  ← hashing.py
+│  raw_hash (SHA-256  │     Canonical serialization → hash
+│  of cell values)    │     Normalized values → hash
+│  normalized_hash    │     Both always stored
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐
+│  3. upsert entities │  ← graph_ops.py
+│  LOOKUP existing or │     Dedup by (workspace, type, pk)
+│  INSERT new Entity  │
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐
+│  4. change detection│  ← ingestion_engine.py
+│  Compare hash with  │     strict → raw_hash
+│  existing open      │     normalized → normalized_hash
+│  assertions         │     Unchanged=skip, Changed=close+new
+└─────────┬───────────┘     New=create, Disappeared=close
+          │
+          ▼
+┌─────────────────────┐
+│  5. write graph     │  ← graph_ops.py
+│  AssertionRecord    │     INSERT vertices + edges
+│  PropertyValue      │     ASSERTED_REL: entity→asrt→pv
+│  ASSERTED_REL edges │     or entity→asrt→entity
+└─────────┬───────────┘
+          │
+          ▼
+┌─────────────────────┐
+│  6. ChangeEvent     │  ← ingestion_engine.py
+│  ONE per import run │     CREATED_ASSERTION edges
+│  Stats + links      │     CLOSED_ASSERTION edges
+└─────────────────────┘     TRIGGERED_BY → ImportRun
+```
+
+### Assertion Key Formats
+
+- **Property:** `{wid}:{entity_type}:{pk}:prop:{property_key}`
+- **Relationship:** `{wid}:{type_from}:{pk_from}:{rel_type}:{type_to}:{pk_to}`
+
+### Dual-Hash Change Detection
+
+| Mode | Hash compared | Detects |
+|------|---------------|---------|
+| `strict` | `raw_hash` | Any cell value change (whitespace, casing, formatting) |
+| `normalized` | `normalized_hash` | Only semantically meaningful changes |
+
+Both hashes are always computed and stored regardless of mode.
+
+### Ingestion Spec Format
+
+YAML files in `specs/` directory define how Excel files map to graph entities:
+
+```yaml
+spec_name: example
+workspace_id: my_workspace
+sheets:
+  - sheet_name: "Items"
+    entities:
+      item:
+        entity_type: Item
+        key_columns: ["item_code"]
+        key_template: "{item_code}"
+        properties:
+          - source_column: "Item Code"
+            target_property: item_code
+    relationships:
+      - relationship_type: BELONGS_TO
+        from_entity: item
+        to_entity: category
+change_detection:
+  mode: normalized
+```
+
+---
+
 ## Project Structure
 
 ```
@@ -113,11 +208,16 @@ Two view modes:
 │   ├── core/
 │   │   ├── config.py           # Settings from .env
 │   │   ├── graph_client.py     # NebulaGraph connection pool
+│   │   ├── graph_ops.py        # nGQL CRUD for all vertex/edge types (M1)
 │   │   ├── vector_client.py    # Qdrant client
 │   │   ├── redis_client.py     # Redis client
 │   │   ├── schema_registry.py  # Domain schema YAML loader
 │   │   ├── resolved_view.py    # Resolution algorithm
 │   │   ├── ingestion_spec.py   # Ingestion mapping format
+│   │   ├── ingestion_engine.py # Import pipeline + change detection (M1)
+│   │   ├── excel_parser.py     # Excel parsing + staged rows (M1)
+│   │   ├── hashing.py          # Dual-hash + assertion keys (M1)
+│   │   ├── spec_loader.py      # Load YAML ingestion specs (M1)
 │   │   ├── models.py           # Pydantic models
 │   │   └── id_gen.py           # UUID v7 generator
 │   └── api/
@@ -125,8 +225,8 @@ Two view modes:
 │       ├── health.py           # GET /api/health
 │       ├── workspaces.py       # Workspace CRUD
 │       ├── schemas.py          # Schema queries
-│       ├── entities.py         # Entity endpoints (M1)
-│       └── imports.py          # Import endpoints (M1)
+│       ├── entities.py         # Entity search + detail (M1)
+│       └── imports.py          # Import upload + status + diff (M1)
 ├── frontend/                   # Next.js app
 ├── infra/
 │   ├── docker-compose.yml      # 6 Docker services
@@ -134,12 +234,21 @@ Two view modes:
 ├── migrations/
 │   ├── 001_core_schema.ngql    # NebulaGraph schema
 │   └── run_migration.sh        # Migration runner
+├── data/
+│   └── raw/                    # Uploaded Excel files (gitignored)
 ├── schemas/                    # Domain schema YAMLs
 ├── specs/                      # Ingestion mapping specs
 ├── rules/                      # Propagation rules (M2+)
 ├── aliases/                    # Alias dictionaries (M2+)
-├── tests/                      # pytest test suite
-└── Docs/
+├── tests/
+│   ├── test_graph_ops.py       # 23 tests — nGQL generation
+│   ├── test_hashing.py         # 25 tests — dual-hash, assertion keys
+│   ├── test_excel_parser.py    # 25 tests — Excel parsing
+│   ├── test_ingestion_engine.py# 10 tests — change detection pipeline
+│   ├── test_spec_loader.py     # 4 tests — spec loading
+│   ├── test_resolved_view.py   # 15 tests — resolution algorithm
+│   └── test_schema_registry.py # 14 tests — schema validation
+└── docs/
     ├── PRD_v2.2.md             # Product Requirements
     ├── TODO.md                 # Milestone progress
     └── ARCHITECTURE.md         # This file
@@ -147,7 +256,7 @@ Two view modes:
 
 ---
 
-## API Endpoints (M0)
+## API Endpoints (M0 + M1)
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -158,10 +267,12 @@ Two view modes:
 | GET | `/api/w/{wid}/schema` | Full domain schema |
 | GET | `/api/w/{wid}/schema/entity-types` | List entity types |
 | GET | `/api/w/{wid}/schema/relationship-types` | List relationship types |
-| GET | `/api/w/{wid}/entities/search` | Search entities (M1) |
-| GET | `/api/w/{wid}/entities/{id}` | Entity details (M1) |
-| GET | `/api/w/{wid}/imports` | List imports (M1) |
-| POST | `/api/w/{wid}/imports` | Create import (M1) |
+| GET | `/api/w/{wid}/entities/search` | Search entities (type, primary_key, q) |
+| GET | `/api/w/{wid}/entities/{id}` | Entity detail (view_mode, scenario_id) |
+| POST | `/api/w/{wid}/imports` | Upload Excel + spec → run import |
+| GET | `/api/w/{wid}/imports` | List import runs |
+| GET | `/api/w/{wid}/imports/{id}` | Import status + stats |
+| GET | `/api/w/{wid}/imports/{id}/diff` | Change diff (created/closed assertions) |
 
 OpenAPI docs: `http://localhost:9200/docs`
 
@@ -203,6 +314,17 @@ These are important details discovered during M0 implementation:
 ### Python / FastAPI
 - **pydantic-settings**: `.env` has extra vars not in Settings → `"extra": "ignore"` in model_config
 - **Git remote**: uses SSH (`git@github.com:Mushkrot/GraphOps.git`), key at `~/.ssh/git`
+- **datetime.utcnow()**: deprecated in Python 3.12+ — use `datetime.now(timezone.utc)` instead
+- **python-multipart**: required for FastAPI `UploadFile` / `Form()` — added to requirements.txt
+- **openpyxl**: use `data_only=True` when reading to get computed values, not formulas
+
+### M1 Ingestion Notes
+- **NebulaGraph NULL filtering**: LOOKUP queries cannot filter `valid_to IS NULL` — workaround: fetch all, filter in Python
+- **ASSERTED_REL edge topology**: two edges per assertion: `from_entity→assertion` and `assertion→target` (PropertyValue or Entity)
+- **Change detection scope**: disappearance detection finds previous import_run by spec_name, compares assertion_keys
+- **Synchronous imports**: M1 runs imports inline in HTTP request. RQ background jobs deferred. `run_import()` function is RQ-ready (takes serializable args, no request context)
+- **Spec files**: stored in `specs/` directory, loaded by name (without `.yaml` extension). Files starting with `_` are excluded from `list_specs()` but can be loaded directly
+- **Upload storage**: raw files saved to `data/raw/{workspace_id}/` (gitignored)
 
 ---
 
@@ -224,7 +346,7 @@ docker run --rm --network infra_graphops-net \
 # 3. Activate Python venv
 source .venv/bin/activate
 
-# 4. Run tests
+# 4. Run all tests (should be 116 passing as of M1 completion)
 pytest tests/ -v
 
 # 5. Start backend
@@ -233,3 +355,36 @@ uvicorn backend.main:app --host 0.0.0.0 --port 9200
 # 6. Verify health
 curl http://localhost:9200/api/health
 ```
+
+### Current Status Summary (end of M1)
+
+**Completed:** M0 (Foundations) + M1 (Data Ingestion Engine)
+**Test count:** 116 tests, all passing
+**Next milestone:** M2 (Query Engine + Graph Explorer UI)
+
+**M1 delivers:**
+- Full data ingestion pipeline: Excel upload → parse → hash → change detect → graph write
+- Entity search + detail endpoints with resolved view integration
+- Import management (upload, list, status, diff)
+- Dual-hash change detection (strict vs normalized modes)
+- ChangeEvent tracking (one per import, links to all affected assertions)
+
+**What M1 does NOT yet have (deferred):**
+- Background job queue (RQ) — imports run synchronously
+- Integration tests with live NebulaGraph — unit tests mock graph_ops
+- No sample data imported — needs real ingestion spec + Excel file to test end-to-end
+
+**Key files for M1:**
+
+| File | Purpose |
+|------|---------|
+| `backend/core/graph_ops.py` | nGQL CRUD for all 6 vertex types + 4 edge types |
+| `backend/core/hashing.py` | SHA-256 dual-hash + assertion key builders |
+| `backend/core/excel_parser.py` | openpyxl reader → StagedRow dataclasses |
+| `backend/core/ingestion_engine.py` | `run_import()` — full pipeline orchestrator |
+| `backend/core/spec_loader.py` | Loads YAML specs from `specs/` directory |
+| `backend/api/imports.py` | POST upload, GET list/status/diff |
+| `backend/api/entities.py` | GET search, GET detail (resolved view) |
+| `backend/core/models.py` | All Pydantic models (vertex + API) |
+
+**Dependencies added in M1:** `openpyxl>=3.1.0`, `python-multipart>=0.0.9`

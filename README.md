@@ -9,6 +9,8 @@ Universal, domain-agnostic platform for structuring, analyzing, and reasoning ab
 - **Domain-agnostic** — define any domain via YAML schemas (telecom, supply chain, etc.)
 - **What-if scenarios** — overlay assertions without modifying the base graph
 - **Workspace isolation** — multiple independent projects in one deployment
+- **Data ingestion** — Excel files mapped to graph entities via declarative YAML specs
+- **Dual-hash change detection** — re-imports detect new, changed, unchanged, and disappeared data
 
 ## Quick Start
 
@@ -29,11 +31,15 @@ curl http://localhost:9200/api/health
 
 ## Documentation
 
-- [Architecture Overview](Docs/ARCHITECTURE.md) — service map, data model, project structure
-- [Development TODO](Docs/TODO.md) — milestone progress tracker
-- [Product Requirements](Docs/PRD_v2.2.md) — full PRD v2.2
+- [Architecture Overview](docs/ARCHITECTURE.md) — service map, data model, ingestion pipeline, project structure
+- [Development TODO](docs/TODO.md) — milestone progress tracker
+- [Product Requirements](docs/PRD_v2.2.md) — full PRD v2.2
 - [OpenAPI Docs](http://localhost:9200/docs) — interactive API documentation (when backend is running)
 
-## Current Status: M0 (Foundations) Complete
+## Current Status: M1 (Data Ingestion Engine) Complete
 
-Infrastructure, core graph schema, backend skeleton, domain schema registry, resolved view engine, and test suite are in place. Ready for M1 (Data Ingestion Engine).
+**M0 (Foundations):** Docker infrastructure, NebulaGraph schema (6 tags, 4 edges, 16 indexes), FastAPI backend, schema registry, resolved view engine.
+
+**M1 (Data Ingestion):** Excel upload + parsing, dual-hash change detection, entity/assertion/property graph writing, import management endpoints, entity search + detail with resolved view. 116 tests passing.
+
+**Next:** M2 (Query Engine + Graph Explorer UI) — neighbor expansion, path queries, impact analysis, frontend graph canvas.

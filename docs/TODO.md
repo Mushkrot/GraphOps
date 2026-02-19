@@ -28,37 +28,41 @@ Tracks milestone progress per PRD v2.2 section 24.
 
 ---
 
-## M1: Data Ingestion Engine [PENDING]
+## M1: Data Ingestion Engine [COMPLETE]
 
-- [ ] Excel file upload endpoint (`POST /api/w/{wid}/imports`)
-- [ ] Ingestion spec YAML loader and validator
-- [ ] Sheet reader (openpyxl) with column mapping
-- [ ] Entity creation/upsert logic
-  - [ ] Generate entity VIDs via UUID v7
-  - [ ] Deduplicate by primary_key within workspace
-- [ ] AssertionRecord creation
-  - [ ] Compute assertion_key from entity + relationship + property
-  - [ ] Compute raw_hash (canonical row serialization)
-  - [ ] Compute normalized_hash (normalized values)
-  - [ ] Dual-hash change detection (strict vs normalized mode)
-- [ ] PropertyValue vertex creation
-- [ ] Relationship assertion creation (ASSERTED_REL edges)
-- [ ] ChangeEvent creation (one per import run)
-  - [ ] CREATED_ASSERTION / CLOSED_ASSERTION edges
-  - [ ] Stats tracking (created, updated, closed, unchanged counts)
-- [ ] ImportRun tracking (start, progress, complete/error)
-- [ ] Source registration and authority_rank management
-- [ ] Re-import logic (detect changes via hash comparison)
-- [ ] Background job queue (Redis + RQ)
-- [ ] Import status polling endpoint
-- [ ] Tests: ingestion pipeline, change detection, re-import
+- [x] Graph data access layer (`graph_ops.py` — nGQL CRUD for all vertex/edge types)
+- [x] Dual-hash engine (`hashing.py` — raw_hash + normalized_hash + assertion key builders)
+- [x] Excel parser (`excel_parser.py` — openpyxl, column mapping, staged rows)
+- [x] Ingestion engine (`ingestion_engine.py` — full pipeline with change detection)
+  - [x] Entity creation/upsert (deduplicate by workspace + type + primary_key)
+  - [x] Assertion key computation (relationships + properties)
+  - [x] Dual-hash change detection (strict vs normalized mode)
+  - [x] PropertyValue vertex creation + HAS_PROPERTY assertions
+  - [x] Relationship assertion creation + ASSERTED_REL edges
+  - [x] Disappearance detection (close assertions not seen in re-import)
+  - [x] ChangeEvent creation (one per import run, CREATED/CLOSED edges)
+  - [x] ImportRun tracking with stats
+- [x] Spec loader (`spec_loader.py` — loads YAML ingestion specs)
+- [x] Excel file upload endpoint (`POST /api/w/{wid}/imports`)
+- [x] Import listing and status endpoints (`GET /imports`, `GET /imports/{id}`)
+- [x] Import diff endpoint (`GET /imports/{id}/diff`)
+- [x] Entity search endpoint (`GET /api/w/{wid}/entities/search`)
+- [x] Entity detail endpoint with resolved view (`GET /api/w/{wid}/entities/{id}`)
+- [x] Source authority management (`upsert_source`, `get_source_authority_map`)
+- [x] API response models (ImportCreateResponse, EntityDetailResponse, etc.)
+- [x] Test suite (116 tests, all passing)
+- [ ] Background job queue (Redis + RQ) — deferred, synchronous-first
+- [ ] Integration tests with live NebulaGraph — next step
 
 ---
 
 ## M2: Query Engine + Graph Explorer UI [PENDING]
 
-- [ ] Entity search endpoint (by type, primary_key, display_name)
-- [ ] Entity detail endpoint (resolved view of all properties)
+*Note: Entity search + detail endpoints were built in M1. M2 focuses on
+advanced graph queries and the frontend UI.*
+
+- [x] Entity search endpoint (by type, primary_key, display_name) — done in M1
+- [x] Entity detail endpoint (resolved view of all properties) — done in M1
 - [ ] Neighbor expansion endpoint (with depth control)
 - [ ] Path query endpoint (shortest path between entities)
 - [ ] Impact analysis endpoint (downstream dependency traversal)
